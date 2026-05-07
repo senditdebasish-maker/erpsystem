@@ -53,11 +53,16 @@ if(!empty($_POST['search'])) {
 // KPI MATH
 $stats = $conn->query("SELECT COUNT(*) as c, SUM(total_amount) as t_spent, SUM(IFNULL(total_tax, 0)) as t_gst, SUM(IFNULL(discount, 0)) as t_disc, SUM(total_amount - IFNULL(paid_amount,0)) as t_pending FROM invoices i $where")->fetch_assoc();
 
-// TABLE FETCH - NOW INCLUDES PAYMENT HISTORY
+// TABLE FETCH - UPDATED TO SHOW BOLD PRODUCT NAMES & DETAILS
 $sql = "SELECT i.*, b.bank_name, c.customer_id, c.contact_no, c.village, c.dist,
         (SELECT GROUP_CONCAT(
-            CONCAT(pr.product_name, CASE WHEN ii.item_note != '' AND ii.item_note IS NOT NULL THEN CONCAT(' <span class=\"text-primary small fst-italic\">[', ii.item_note, ']</span>') ELSE '' END) 
-            SEPARATOR '<br>• '
+            CONCAT(
+                '<div class=\"mb-1\"><span class=\"fw-bolder text-dark\">', pr.product_name, '</span> ',
+                '<span class=\"small text-muted\">(Qty: ', IFNULL(ii.qty, 1), ')</span>',
+                CASE WHEN ii.item_note != '' AND ii.item_note IS NOT NULL THEN CONCAT(' <span class=\"text-primary small fst-italic\">[', ii.item_note, ']</span>') ELSE '' END,
+                '</div>'
+            ) 
+            SEPARATOR ''
         ) FROM invoice_items ii JOIN products pr ON ii.product_id = pr.id WHERE ii.invoice_id = i.id) as product_names,
         (SELECT GROUP_CONCAT(
             CONCAT('~ ₹', amount, ' on ', DATE_FORMAT(payment_date, '%d-%b-%Y %h:%i %p')) 
@@ -77,6 +82,12 @@ if($res && $res->num_rows > 0) {
         $total = (float)$row['total_amount'];
         $discount = (float)($row['discount'] ?? 0);
         $due = $total - $paid;
+
+        // --- NEW LOGIC: FORMAT DISCOUNT AS 00.00(0%) ---
+        $gross_amt = $total + $discount;
+        $disc_pct = ($gross_amt > 0) ? round(($discount / $gross_amt) * 100, 1) : 0;
+        $formatted_discount = number_format($discount, 2) . " (" . $disc_pct . "%)";
+        // -----------------------------------------------
         
         $date = date('d M Y', strtotime($row['created_at'])) . "<br><small class='text-muted'>" . date('h:i A', strtotime($row['created_at'])) . "</small>";
         $bank_text = !empty($row['bank_name']) ? "<div class='small text-primary fw-bold mt-1'><i class='bi bi-bank me-1'></i>{$row['bank_name']}</div>" : "<div class='small text-muted mt-1'><i class='bi bi-cash me-1'></i>Pending/Cash</div>";
@@ -126,8 +137,8 @@ if($res && $res->num_rows > 0) {
         // Clean up the product list for WhatsApp
         $wa_products = "";
         if (!empty($row['product_names'])) {
-            $clean_products = strip_tags(str_replace('<br>• ', "\n- ", $row['product_names']));
-            $wa_products = "- " . $clean_products;
+            $clean_products = strip_tags(str_replace('</div>', "\n- ", $row['product_names']));
+            $wa_products = "- " . trim($clean_products);
         }
 
         // ⚠️ REPLACE THIS WITH YOUR REAL UPI ID (e.g., your_number@sbi, your_business@icici)
@@ -185,8 +196,8 @@ if($res && $res->num_rows > 0) {
             <td class='ps-4'>{$inv_link}</td>
             <td>{$date}{$bank_text}</td>
             <td>{$customer_details}</td>
-            <td><div class='small text-secondary' style='max-height: 80px; overflow-y: auto;'>• {$row['product_names']}</div></td>
-            <td class='text-end text-danger fw-bold'>- ₹".number_format($discount, 2)."</td>
+            <td><div style='max-height: 80px; overflow-y: auto;'>{$row['product_names']}</div></td>
+            <td class='text-end text-warning fw-bold'>{$formatted_discount}</td>
             <td class='text-end'><h6 class='mb-0 fw-bold text-dark'>₹".number_format($total, 2)."</h6></td>
             <td class='text-center align-middle' style='min-width: 130px;'>{$progress_ui}</td>
             <td class='text-center pe-4'>{$action_btns}</td>

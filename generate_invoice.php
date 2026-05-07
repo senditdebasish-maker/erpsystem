@@ -95,12 +95,13 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
         position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; 
     }
     
-    /* Modals */
+    /* Modals & Utilities */
     .image-upload-box { border: 2px dashed #cbd5e1; background-color: #f8fafc; border-radius: 1rem; height: 160px; cursor: pointer; position: relative; overflow: hidden; }
     .image-upload-box:hover { border-color: #0d6efd; background-color: #eff6ff; }
     .image-upload-box .preview-img { object-fit: cover; border-radius: 0.8rem; position: absolute; top:0; left:0; width:100%; height:100%; }
-    
     .tooltip-inner { background-color: #1e293b; font-weight: 500; font-size: 0.75rem; padding: 6px 10px; border-radius: 6px; }
+    .hover-profile-link { cursor: pointer; text-decoration: underline dashed; transition: color 0.2s; }
+    .hover-profile-link:hover { color: #0d6efd !important; }
     
     /* COMPACT SUMMARY SIDEBAR */
     .summary-card { font-size: 0.85rem; }
@@ -110,7 +111,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
 
 <div class="container-fluid mb-5 mt-3">
     
-    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-2 border-primary border-opacity-10">
         <div class="d-flex align-items-center gap-3">
             <div class="bg-primary bg-opacity-10 p-2 rounded-3 text-primary"><i class="bi bi-receipt-cutoff fs-4"></i></div>
@@ -124,9 +124,7 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
         </a>
     </div>
 
-    <!-- SUCCESS ALERT WITH PRINT AND VIEW HISTORY BUTTONS -->
     <?php if(isset($_GET['msg']) && $_GET['msg'] == 'success'): 
-        // Smart Fallback: Get the latest invoice ID if the URL doesn't have it
         $print_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($print_id == 0) {
             $last_inv_check = $conn->query("SELECT id FROM invoices ORDER BY id DESC LIMIT 1");
@@ -136,13 +134,10 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
         <div class="alert alert-success alert-dismissible fade show fw-bold shadow-sm border-0 border-start border-success border-4 py-3 rounded-3 d-flex justify-content-between align-items-center">
             <div><i class="bi bi-check-circle-fill me-2 fs-5 text-success"></i> Invoice successfully generated and saved!</div>
             <div class="d-flex align-items-center gap-2">
-                <!-- PRINT BUTTON FIRST -->
                 <a href="print_invoice.php?id=<?php echo $print_id; ?>" target="_blank" class="btn btn-dark btn-sm fw-bold shadow-sm px-4 rounded-pill">
                     <i class="bi bi-printer-fill me-1 text-success"></i> Print Bill
                 </a>
-                <!-- VIEW HISTORY BUTTON SECOND -->
                 <a href="manage_invoices.php" class="btn btn-success btn-sm fw-bold shadow-sm px-4 rounded-pill">View in History</a>
-                
                 <button type="button" class="btn-close position-relative top-0 end-0 ms-2" data-bs-dismiss="alert"></button>
             </div>
         </div>
@@ -151,29 +146,47 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
     <form action="modules/save_invoice.php" method="POST">
         <div class="row g-3">
             
-            <!-- LEFT COLUMN (WIDER FOR TABLE) -->
             <div class="col-xl-9 col-lg-8">
                 
-                <!-- CUSTOMER SELECTION -->
                 <div class="card shadow-sm border-0 mb-3 rounded-4 card-hover">
                     <div class="card-body p-3 bg-white rounded-4">
-                        <div class="row g-3 align-items-end">
+                        <div class="row g-3 align-items-start">
                             <div class="col-md-8">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-label fw-bold text-secondary small text-uppercase tracking-wide mb-0"><i class="bi bi-person-fill me-1"></i> Billing To</label>
-                                    <a href="#" class="text-decoration-none small fw-bold text-primary" data-bs-toggle="modal" data-bs-target="#quickCustomerModal"><i class="bi bi-plus-circle me-1"></i>New Customer</a>
+                                    <a href="#" class="text-decoration-none small fw-bold text-primary" data-bs-toggle="modal" data-bs-target="#quickCustomerModal" onclick="$('#ajaxCustomerForm')[0].reset(); $('#modal_update_id').val(''); $('#quickCustomerModal .modal-title').html('<i class=\'bi bi-person-plus me-2\'></i>Quick Register Customer'); $('#sameAsBilling').prop('checked', false);"><i class="bi bi-plus-circle me-1"></i>New Customer</a>
                                 </div>
                                 <select name="customer_id" id="mainCustomerSelect" class="form-select customer-select" required>
                                     <option value="">-- Search by Name, ID, or Phone --</option>
                                     <?php 
-                                    $custs = $conn->query("SELECT id, customer_id, name, contact_no, village FROM customers ORDER BY name ASC");
+                                    // Fetch ALL customer data so we can dynamically build the display box
+                                    $custs = $conn->query("SELECT * FROM customers ORDER BY name ASC");
                                     while($c = $custs->fetch_assoc()) {
                                         $cid = !empty($c['customer_id']) ? $c['customer_id'] : 'CUST-'.str_pad($c['id'], 4, '0', STR_PAD_LEFT);
-                                        $village = !empty($c['village']) ? $c['village'] : 'Address N/A';
-                                        echo "<option value='{$c['id']}' data-cid='{$cid}' data-phone='{$c['contact_no']}' data-village='{$village}'>{$c['name']}</option>";
+                                        $data_json = htmlspecialchars(json_encode($c), ENT_QUOTES, 'UTF-8');
+                                        echo "<option value='{$c['id']}' data-json='{$data_json}' data-cid='{$cid}' data-phone='{$c['contact_no']}'>{$c['name']}</option>";
                                     }
                                     ?>
                                 </select>
+
+                                <div id="customerDetailsBox" class="mt-2 p-2 bg-light border border-secondary border-opacity-25 rounded-3 d-none">
+                                    <div class="row">
+                                        <div class="col-6 border-end">
+                                            <small class="fw-bold text-muted text-uppercase d-block mb-1" style="font-size: 0.7rem;">Billing Address</small>
+                                            <div id="displayBilling" class="small text-dark lh-sm fw-medium"></div>
+                                        </div>
+                                        <div class="col-6 ps-3">
+                                            <small class="fw-bold text-muted text-uppercase d-block mb-1" style="font-size: 0.7rem;">Shipping Address</small>
+                                            <div id="displayShipping" class="small text-dark lh-sm fw-medium"></div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-end">
+                                        <button type="button" id="updateAddressBtn" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" style="font-size: 0.75rem;">
+                                            <i class="bi bi-pencil-square me-1"></i> Update Details
+                                        </button>
+                                    </div>
+                                </div>
+
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label fw-bold text-secondary small text-uppercase tracking-wide mb-1"><i class="bi bi-calendar-event me-1"></i> Invoice Date</label>
@@ -185,7 +198,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                     </div>
                 </div>
 
-                <!-- ITEMIZED CART -->
                 <div class="card shadow-sm border-0 mb-3 rounded-4 card-hover">
                     <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
                         <h6 class="mb-0 fw-bolder text-dark"><i class="bi bi-cart-check-fill text-primary me-2"></i>Product Ledger</h6>
@@ -224,7 +236,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                                     </tbody>
                                 </table>
                             </div>
-                            <!-- ACTION BAR: Sticky Bottom -->
                             <div class="p-2 bg-light border-top d-flex justify-content-between align-items-center">
                                 <button type="button" id="addRow" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-sm">
                                     <i class="bi bi-plus-lg me-1"></i> Add Row
@@ -238,7 +249,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                 </div>
             </div>
 
-            <!-- COMPACT RIGHT COLUMN: PAYMENT SUMMARY -->
             <div class="col-xl-3 col-lg-4">
                 <div class="card border-0 shadow-lg rounded-4 overflow-hidden sticky-top summary-card" style="top: 20px; z-index: 1;">
                     <div class="card-header bg-dark text-white py-2 border-0">
@@ -257,7 +267,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                             <input type="hidden" name="total_tax" id="totalTaxInput">
                         </div>
                         
-                        <!-- COMPACT DISCOUNT TOGGLE -->
                         <div class="mb-3 pb-3 border-bottom border-secondary border-opacity-10">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted fw-bold">Discount</span>
@@ -328,14 +337,25 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
     </form>
 </div>
 
-<!-- ==========================================
-     MODALS
-=========================================== -->
-<!-- QUICK ADD CUSTOMER MODAL -->
+<div class="modal fade" id="infoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow rounded-4 overflow-hidden">
+            <div class="modal-header bg-dark text-white py-3 border-0">
+                <h5 class="modal-title fw-bold" id="infoModalTitle">Customer Profile</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="infoModalBody">
+                <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="quickCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content shadow-lg border-0 rounded-4 bg-light">
             <form id="ajaxCustomerForm" enctype="multipart/form-data">
+                <input type="hidden" name="customer_update_id" id="modal_update_id" value="">
                 <div class="modal-header bg-primary text-white py-3 border-0">
                     <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>Quick Register Customer</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -345,23 +365,36 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                         <div class="col-xl-6">
                             <div class="card h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-header bg-white py-3 border-0">
-                                    <h6 class="fw-bold text-primary mb-0"><i class="bi bi-person-lines-fill me-2"></i>Personal Details</h6>
+                                    <h6 class="fw-bold text-primary mb-0"><i class="bi bi-geo-alt-fill me-2"></i>Contact & Addresses</h6>
                                 </div>
                                 <div class="card-body bg-light rounded-bottom-4">
-                                    <div class="mb-3">
-                                        <input type="text" name="name" class="form-control border-secondary" placeholder="Customer Name *" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <input type="text" name="contact_no" class="form-control border-secondary" placeholder="Contact No *" required>
-                                    </div>
                                     <div class="row g-2 mb-3">
-                                        <div class="col-6"><input type="text" name="village" class="form-control border-secondary" placeholder="Village"></div>
-                                        <div class="col-6"><input type="text" name="po" class="form-control border-secondary" placeholder="P.O"></div>
+                                        <div class="col-6"><input type="text" name="name" id="modal_name" class="form-control border-secondary" placeholder="Customer Name *" required></div>
+                                        <div class="col-6"><input type="text" name="contact_no" id="modal_contact" class="form-control border-secondary" placeholder="Contact No *" required></div>
+                                    </div>
+                                    
+                                    <h6 class="small fw-bold text-muted mb-2 border-bottom pb-1">Billing Address</h6>
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-6"><input type="text" name="village" id="modal_vill" class="form-control border-secondary form-control-sm" placeholder="Village / Street"></div>
+                                        <div class="col-6"><input type="text" name="po" id="modal_po" class="form-control border-secondary form-control-sm" placeholder="P.O"></div>
+                                        <div class="col-4"><input type="text" name="dist" id="modal_dist" class="form-control border-secondary form-control-sm" placeholder="District"></div>
+                                        <div class="col-4"><input type="text" name="pin" id="modal_pin" class="form-control border-secondary form-control-sm" placeholder="PIN"></div>
+                                        <div class="col-4"><input type="text" name="state" id="modal_state" class="form-control border-secondary form-control-sm" placeholder="State"></div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-2">
+                                        <h6 class="small fw-bold text-muted mb-0">Shipping Address</h6>
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" id="sameAsBilling">
+                                            <label class="form-check-label small" style="font-size:0.75rem;" for="sameAsBilling">Same as Billing</label>
+                                        </div>
                                     </div>
                                     <div class="row g-2">
-                                        <div class="col-4"><input type="text" name="dist" class="form-control border-secondary" placeholder="District"></div>
-                                        <div class="col-4"><input type="text" name="pin" class="form-control border-secondary" placeholder="PIN"></div>
-                                        <div class="col-4"><input type="text" name="state" class="form-control border-secondary" placeholder="State"></div>
+                                        <div class="col-6"><input type="text" name="shipping_village" id="ship_vill" class="form-control border-secondary form-control-sm" placeholder="Village / Street"></div>
+                                        <div class="col-6"><input type="text" name="shipping_po" id="ship_po" class="form-control border-secondary form-control-sm" placeholder="P.O"></div>
+                                        <div class="col-4"><input type="text" name="shipping_dist" id="ship_dist" class="form-control border-secondary form-control-sm" placeholder="District"></div>
+                                        <div class="col-4"><input type="text" name="shipping_pin" id="ship_pin" class="form-control border-secondary form-control-sm" placeholder="PIN"></div>
+                                        <div class="col-4"><input type="text" name="shipping_state" id="ship_state" class="form-control border-secondary form-control-sm" placeholder="State"></div>
                                     </div>
                                 </div>
                             </div>
@@ -375,7 +408,7 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                                 <div class="card-body bg-light rounded-bottom-4">
                                     <div class="row g-2 mb-3">
                                         <div class="col-md-6">
-                                            <select name="bank_name" class="form-select border-secondary">
+                                            <select name="bank_name" id="modal_bank" class="form-select border-secondary">
                                                 <option value="">-- Select Bank --</option>
                                                 <option value="SBI">State Bank of India</option>
                                                 <option value="HDFC">HDFC Bank</option>
@@ -385,15 +418,15 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                                             </select>
                                         </div>
                                         <div class="col-md-6">
-                                            <input type="text" name="branch_name" class="form-control border-secondary" placeholder="Branch Name">
+                                            <input type="text" name="branch_name" id="modal_branch" class="form-control border-secondary" placeholder="Branch Name">
                                         </div>
                                     </div>
                                     <div class="row g-2 mb-3">
                                         <div class="col-md-6">
-                                            <input type="text" name="account_no" class="form-control border-secondary fw-bold text-dark" placeholder="Account Number">
+                                            <input type="text" name="account_no" id="modal_acc" class="form-control border-secondary fw-bold text-dark" placeholder="Account Number">
                                         </div>
                                         <div class="col-md-6">
-                                            <input type="text" name="ifsc_code" class="form-control border-secondary text-uppercase" placeholder="IFSC Code">
+                                            <input type="text" name="ifsc_code" id="modal_ifsc" class="form-control border-secondary text-uppercase" placeholder="IFSC Code">
                                         </div>
                                     </div>
                                     <div class="mb-0">
@@ -413,7 +446,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
     </div>
 </div>
 
-<!-- QUICK ADD PRODUCT MODAL -->
 <div class="modal fade" id="quickProductModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content shadow-lg border-0 rounded-4 bg-light">
@@ -524,9 +556,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
     </div>
 </div>
 
-<!-- ==========================================
-     INNER MODALS (CATEGORIES & SUBCATEGORIES)
-=========================================== -->
 <div class="modal fade" id="innerCatModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -567,7 +596,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<!-- Initialize Bootstrap Tooltips for Hover -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -579,52 +607,167 @@ $(document).ready(function() {
         var el = $(c.element);
         var cid = el.data('cid') ? `<span class="badge bg-secondary bg-opacity-10 text-dark border me-1">${el.data('cid')}</span>` : '';
         var phone = el.data('phone') ? `<i class="bi bi-telephone text-primary me-1"></i>${el.data('phone')}` : '';
-        var village = el.data('village') ? `<span class="ms-2 border-start ps-2"><i class="bi bi-geo-alt text-danger me-1"></i>${el.data('village')}</span>` : '';
-        return $(`<div class="d-flex flex-column lh-sm"><span class="fw-bold text-dark fs-6">${c.text}</span><span class="small text-muted mt-1">${cid} ${phone} ${village}</span></div>`);
+        return $(`<div class="d-flex flex-column lh-sm"><span class="fw-bold text-dark fs-6">${c.text}</span><span class="small text-muted mt-1">${cid} ${phone}</span></div>`);
     }
 
-    // CUSTOMER FORMATTER (SELECTION - ADDS HOVER TOOLTIP)
+    // CUSTOMER FORMATTER (SELECTION - ADDS HOVER LOGIC)
     function formatCustomerSelection (c) {
         if (!c.id) return c.text;
         var el = $(c.element);
-        var cid = el.data('cid') || 'N/A';
-        var phone = el.data('phone') || 'N/A';
-        var village = el.data('village') || 'N/A';
-        
-        let details = `ID: ${cid} | Ph: ${phone} | Loc: ${village}`;
-        return $(`<span data-bs-toggle="tooltip" data-bs-placement="bottom" title="${details}" style="cursor:help;">${c.text} <i class="bi bi-info-circle-fill text-primary ms-1"></i></span>`);
-    }
-
-    // PRODUCT FORMATTER
-    function formatProduct (p) {
-        if (!p.id) return p.text;
-        var el = $(p.element);
-        var stock = el.data('stock') ? `<span class="badge bg-success float-end shadow-sm">Stock: ${el.data('stock')}</span>` : '';
-        var gst = el.data('gst') ? `<span class="badge bg-info text-dark float-end shadow-sm me-1">GST: ${el.data('gst')}%</span>` : '';
-        var desc = el.data('desc') ? el.data('desc') : 'No description available';
-        return $(`<div class="d-flex flex-column lh-sm w-100"><div class="fw-bold text-dark d-flex justify-content-between align-items-center"><span>${p.text}</span> <div>${gst}${stock}</div></div><div class="small text-muted mt-1 text-truncate" style="max-width: 90%;"><i class="bi bi-info-circle me-1"></i>${desc}</div></div>`);
+        return $(`<span class="hover-profile-link" data-name="${c.text}">${c.text} <i class="bi bi-info-circle text-primary ms-1"></i></span>`);
     }
 
     function initSelect2() {
         $('.customer-select').select2({ templateResult: formatCustomerResult, templateSelection: formatCustomerSelection, width: '100%' });
-        $('.product-select').select2({ templateResult: formatProduct, templateSelection: formatProduct, width: '100%' });
-        $('[data-bs-toggle="tooltip"]').tooltip(); 
+        $('.product-select').select2({ width: '100%' });
     }
     initSelect2();
 
-    // Re-bind tooltips on selection change
-    $(document).on('select2:select', '.customer-select', function() {
-        setTimeout(() => $('[data-bs-toggle="tooltip"]').tooltip(), 100);
+    // ==========================================
+    // 🖱️ HOVER / CLICK PROFILE LOGIC
+    // ==========================================
+    let hoverTimer;
+    $(document).on('mouseenter', '.hover-profile-link', function() {
+        let name = $(this).data('name');
+        hoverTimer = setTimeout(function() {
+            $('#infoModal').modal('show');
+            $('#infoModalBody').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
+            $.post('modules/ajax_get_customer.php', { name: name }, function(res) { $('#infoModalBody').html(res); });
+        }, 800); // 800ms hover delay to prevent accidental pops
+    }).on('mouseleave', '.hover-profile-link', function() {
+        clearTimeout(hoverTimer);
     });
 
-    // OPEN PRODUCT MODAL FROM BUTTON
-    let activeProductDropdown = null;
-    $(document).on('click', '.new-product-btn', function() {
-        activeProductDropdown = $(this).siblings('.product-select');
-        $('#quickProductModal').modal('show');
+    $(document).on('click', '.hover-profile-link', function(e) {
+        e.preventDefault();
+        let name = $(this).data('name');
+        $('#infoModal').modal('show');
+        $('#infoModalBody').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
+        $.post('modules/ajax_get_customer.php', { name: name }, function(res) { $('#infoModalBody').html(res); });
     });
 
-    // DYNAMIC ROWS
+    // ==========================================
+    // 📍 DYNAMIC ADDRESS DISPLAY & UPDATE LOGIC
+    // ==========================================
+    $('#mainCustomerSelect').on('change', function() {
+        let el = $(this).find('option:selected');
+        if(!el.val()) {
+            $('#customerDetailsBox').addClass('d-none');
+            return;
+        }
+
+        let data = el.data('json');
+        if(data) {
+            // Build Billing Address
+            let bill = `${data.village || ''} ${data.po ? ', PO: '+data.po : ''}<br>${data.dist ? 'Dist: '+data.dist : ''} ${data.pin ? ' - '+data.pin : ''}`;
+            if(bill.trim() === '' || bill.trim() === ', PO:<br>') bill = '<span class="text-danger fst-italic">Missing Data</span>';
+            
+            // Build Shipping Address
+            let ship_vill = data.shipping_village || data.village || '';
+            let ship_po = data.shipping_po || data.po || '';
+            let ship_dist = data.shipping_dist || data.dist || '';
+            let ship_pin = data.shipping_pin || data.pin || '';
+            
+            let ship = `${ship_vill} ${ship_po ? ', PO: '+ship_po : ''}<br>${ship_dist ? 'Dist: '+ship_dist : ''} ${ship_pin ? ' - '+ship_pin : ''}`;
+            if(ship.trim() === '' || ship.trim() === ', PO:<br>') ship = '<span class="text-danger fst-italic">Missing Data</span>';
+
+            $('#displayBilling').html(bill);
+            $('#displayShipping').html(ship);
+            $('#customerDetailsBox').removeClass('d-none');
+
+            // Attach data to Update Button
+            $('#updateAddressBtn').data('json', data);
+            
+            // Change button text if data is missing
+            if(bill.includes('Missing') || ship.includes('Missing')) {
+                $('#updateAddressBtn').removeClass('btn-outline-primary').addClass('btn-danger').html('<i class="bi bi-exclamation-circle me-1"></i> Add Address Data');
+            } else {
+                $('#updateAddressBtn').removeClass('btn-danger').addClass('btn-outline-primary').html('<i class="bi bi-pencil-square me-1"></i> Update Details');
+            }
+        }
+    });
+
+    // OPEN UPDATE MODAL PRE-FILLED
+    $('#updateAddressBtn').click(function() {
+        let data = $(this).data('json');
+        
+        // Change Modal Title & ID
+        $('#quickCustomerModal .modal-title').html('<i class="bi bi-pencil-square me-2"></i>Update Customer Details');
+        $('#modal_update_id').val(data.id);
+        
+        // Fill Fields
+        $('#modal_name').val(data.name);
+        $('#modal_contact').val(data.contact_no);
+        $('#modal_vill').val(data.village);
+        $('#modal_po').val(data.po);
+        $('#modal_dist').val(data.dist);
+        $('#modal_pin').val(data.pin);
+        $('#modal_state').val(data.state);
+        
+        $('#ship_vill').val(data.shipping_village);
+        $('#ship_po').val(data.shipping_po);
+        $('#ship_dist').val(data.shipping_dist);
+        $('#ship_pin').val(data.shipping_pin);
+        $('#ship_state').val(data.shipping_state);
+        
+        $('#modal_bank').val(data.bank_name);
+        $('#modal_branch').val(data.branch_name);
+        $('#modal_acc').val(data.account_no);
+        $('#modal_ifsc').val(data.ifsc_code);
+
+        // Reset the Same as Billing Checkbox
+        $('#sameAsBilling').prop('checked', false);
+
+        $('#quickCustomerModal').modal('show');
+    });
+
+    // SAME AS BILLING CHECKBOX
+    $('#sameAsBilling').change(function() {
+        if(this.checked) {
+            $('#ship_vill').val($('#modal_vill').val());
+            $('#ship_po').val($('#modal_po').val());
+            $('#ship_dist').val($('#modal_dist').val());
+            $('#ship_pin').val($('#modal_pin').val());
+            $('#ship_state').val($('#modal_state').val());
+        } else {
+            $('#ship_vill, #ship_po, #ship_dist, #ship_pin, #ship_state').val('');
+        }
+    });
+
+    // AJAX Form Submission - CUSTOMERS (Handles Both Insert & Update)
+    $('#ajaxCustomerForm').submit(function(e) {
+        e.preventDefault();
+        let btn = $(this).find('button[type="submit"]');
+        btn.prop('disabled', true).text('Saving...');
+        
+        $.ajax({
+            url: 'modules/ajax_quick_add.php?type=customer', 
+            type: 'POST', 
+            data: new FormData(this),
+            contentType: false, processData: false, dataType: 'json',
+            success: function(res) {
+                if(res.status == 'success') {
+                    if(res.action === 'update') {
+                        // Reload page to securely refresh the JSON data in the select dropdown
+                        location.reload(); 
+                    } else {
+                        // Insert new option dynamically without reload
+                        let newOption = new Option(res.name, res.id, true, true);
+                        $(newOption).attr('data-json', JSON.stringify({
+                            id: res.id, name: res.name, contact_no: res.phone,
+                            village: res.village, shipping_village: res.shipping_village
+                        }));
+                        $('#mainCustomerSelect').append(newOption).trigger('change');
+                        $('#quickCustomerModal').modal('hide');
+                        $('#ajaxCustomerForm')[0].reset();
+                    }
+                } else alert("Error: " + res.message);
+                btn.prop('disabled', false).html('Save & Select');
+            }
+        });
+    });
+
+    // --- MATH ENGINE & CART LOGIC ---
     const productOptionsTemplate = <?php echo json_encode($prod_options); ?>;
 
     $('#addRow').click(function() {
@@ -649,7 +792,6 @@ $(document).ready(function() {
 
     $(document).on('click', '.remove-row', function() { $(this).closest('tr').remove(); calculateGrandTotal(); });
 
-    // MATH ENGINE
     $(document).on('change', '.product-select', function() {
         let row = $(this).closest('tr');
         let selectedOption = $(this).find('option:selected');
@@ -760,102 +902,6 @@ $(document).ready(function() {
         $('#balanceDue').text(balance.toFixed(2));
     }
 
-    // ==========================================
-    // MODAL LOGIC (Subcategories, Images, AJAX)
-    // ==========================================
-    
-    const subcats = <?php echo json_encode($subcats); ?>;
-    $('#modalCatSelect').on('change', function() {
-        let catId = $(this).val();
-        let subSelect = $('#modalSubCatSelect');
-        subSelect.html('<option value="">Select Subcategory...</option>');
-        subcats.forEach(function(sub) {
-            if(sub.category_id == catId) subSelect.append(`<option value="${sub.id}">${sub.subcategory_name}</option>`);
-        });
-        $('#innerSubCatParent').val(catId); 
-    });
-
-    $('#modalProductImageInput').on('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                $('#modalImagePreview').attr('src', e.target.result).removeClass('d-none');
-                $('#modalUploadPlaceholder').addClass('d-none');
-                $('#modalRemoveImageBtn').removeClass('d-none');
-                $('#modalProductImageInput').css('z-index', '0'); 
-            }
-            reader.readAsDataURL(file);
-        }
-    });
-
-    $('#modalRemoveImageBtn').on('click', function(e) {
-        e.preventDefault(); e.stopPropagation(); 
-        $('#modalProductImageInput').val('').css('z-index', '2'); 
-        $('#modalImagePreview').attr('src', '').addClass('d-none');
-        $('#modalUploadPlaceholder').removeClass('d-none');
-        $(this).addClass('d-none');
-    });
-
-    // --- INNER MODALS AJAX (CATEGORIES) ---
-    $('#btnNewCat').click(function() { $('#innerCatModal').modal('show'); });
-    $('#saveInnerCat').click(function() {
-        let name = $('#innerCatName').val();
-        if(name) {
-            $.post('modules/ajax_add_category.php', {category_name: name}, function(res) {
-                let data = JSON.parse(res);
-                if(data.status == 'success') {
-                    $('#modalCatSelect').append(new Option(data.name, data.id, true, true)).trigger('change');
-                    $('#innerSubCatParent').append(new Option(data.name, data.id));
-                    $('#innerCatModal').modal('hide'); $('#innerCatName').val('');
-                } else alert("Error saving category.");
-            });
-        }
-    });
-
-    $('#btnNewSubCat').click(function() { $('#innerSubCatModal').modal('show'); });
-    $('#saveInnerSubCat').click(function() {
-        let parent = $('#innerSubCatParent').val(); let name = $('#innerSubCatName').val();
-        if(parent && name) {
-            $.post('modules/ajax_add_subcategory.php', {category_id: parent, subcategory_name: name}, function(res) {
-                let data = JSON.parse(res);
-                if(data.status == 'success') {
-                    subcats.push({id: data.id, category_id: data.cat_id, subcategory_name: data.name});
-                    if($('#modalCatSelect').val() == data.cat_id) {
-                        $('#modalSubCatSelect').append(new Option(data.name, data.id, true, true));
-                    }
-                    $('#innerSubCatModal').modal('hide'); $('#innerSubCatName').val('');
-                } else alert("Error saving subcategory.");
-            });
-        }
-    });
-
-    // AJAX Form Submission - CUSTOMERS 
-    $('#ajaxCustomerForm').submit(function(e) {
-        e.preventDefault();
-        let btn = $(this).find('button[type="submit"]');
-        btn.prop('disabled', true).text('Saving...');
-        
-        $.ajax({
-            url: 'modules/ajax_quick_add.php?type=customer', 
-            type: 'POST', 
-            data: new FormData(this),
-            contentType: false, 
-            processData: false,
-            dataType: 'json',
-            success: function(res) {
-                if(res.status == 'success') {
-                    let newOption = new Option(res.name, res.id, true, true);
-                    $(newOption).attr('data-cid', res.cid).attr('data-phone', res.phone).attr('data-village', res.village);
-                    $('#mainCustomerSelect').append(newOption).trigger('change');
-                    $('#quickCustomerModal').modal('hide');
-                    $('#ajaxCustomerForm')[0].reset();
-                } else alert("Error: " + res.message);
-                btn.prop('disabled', false).html('Save & Select');
-            }
-        });
-    });
-
     // AJAX Form Submission - PRODUCTS
     $('#ajaxProductForm').submit(function(e) {
         e.preventDefault();
@@ -866,9 +912,7 @@ $(document).ready(function() {
             url: 'modules/ajax_quick_add.php?type=product',
             type: 'POST',
             data: new FormData(this),
-            contentType: false, 
-            processData: false,
-            dataType: 'json',
+            contentType: false, processData: false, dataType: 'json',
             success: function(res) {
                 if(res.status == 'success') {
                     let optionHTML = `<option value='${res.id}' data-desc='Quick Added...' data-stock='${res.qty}' data-price='${res.price}' data-gst='${res.gst}'>${res.name}</option>`;
