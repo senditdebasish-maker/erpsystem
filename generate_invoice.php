@@ -16,10 +16,10 @@ $prod_options = "<option value=''>Search Item...</option>";
 
 $prods = $conn->query("SELECT id, product_name, description, qty, selling_price, gst_rate FROM products WHERE qty > 0 ORDER BY product_name ASC");
 while($p = $prods->fetch_assoc()) {
-    $desc = htmlspecialchars(addslashes(substr($p['description'] ?? '', 0, 50)), ENT_QUOTES);
+    $desc = htmlspecialchars(addslashes($p['description'] ?? ''), ENT_QUOTES);
     $pname = htmlspecialchars(addslashes($p['product_name']), ENT_QUOTES);
     $gst = isset($p['gst_rate']) ? (float)$p['gst_rate'] : 0;
-    $prod_options .= "<option value='{$p['id']}' data-desc='{$desc}...' data-stock='{$p['qty']}' data-price='{$p['selling_price']}' data-gst='{$gst}'>{$pname}</option>";
+    $prod_options .= "<option value='{$p['id']}' data-desc='{$desc}' data-stock='{$p['qty']}' data-price='{$p['selling_price']}' data-gst='{$gst}'>{$pname}</option>";
 }
 
 // Fetch Categories & Suppliers
@@ -65,7 +65,7 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
        ✨ ENTERPRISE TABLE STYLING ✨
     -------------------------------------- */
     .invoice-table-wrapper { border: 1px solid var(--pos-border); border-radius: 0.5rem; overflow: hidden; background: #fff; }
-    .table-invoice { margin-bottom: 0; width: 100%; }
+    .table-invoice { margin-bottom: 0; width: 100%; table-layout: fixed; } /* Fixed layout prevents stretching */
     .table-invoice thead th { 
         background-color: #f8fafc; color: #475569; font-size: 0.7rem; text-transform: uppercase; 
         letter-spacing: 0.5px; padding: 12px 10px; border-bottom: 1px solid var(--pos-border); font-weight: 700; 
@@ -77,12 +77,52 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
     
     .col-highlight { background-color: #f8fafc; border-left: 1px dashed var(--pos-border); border-right: 1px dashed var(--pos-border); }
 
-    /* Select2 Tweaks */
-    .select2-container--default .select2-selection--single { border: 1px solid var(--pos-border); border-radius: 0.4rem; height: 38px; display: flex; align-items: center; background-color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.01);}
-    .select2-container--default .select2-selection--single .select2-selection__rendered { padding-left: 0; width: 100%; line-height: 1.4; color: #1e293b; font-weight: 500;}
-    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 100%; right: 10px; }
+    /* -------------------------------------
+       ✨ SELECT2 WRAP & WIDE FIX ✨
+    -------------------------------------- */
+    /* 1. Allows the selected item text to wrap onto multiple lines without stretching the table */
+    .select2-container--default .select2-selection--single { 
+        border: 1px solid var(--pos-border); 
+        border-radius: 0.4rem; 
+        min-height: 38px; 
+        height: auto !important; /* Auto height instead of fixed 38px */
+        display: flex; 
+        align-items: center; 
+        background-color: #fff; 
+        box-shadow: 0 1px 2px rgba(0,0,0,0.01);
+        padding: 4px 6px;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { 
+        padding-left: 0; 
+        width: 100%; 
+        line-height: 1.3; 
+        color: #1e293b; 
+        font-weight: 500;
+        white-space: normal !important; /* Force word-wrap inside the table cell */
+        word-break: break-word;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { 
+        height: 100%; 
+        right: 10px; 
+        top: 50%;
+        transform: translateY(-50%);
+        position: absolute;
+    }
+
+    /* 2. Allows the dropdown menu to grow wider than the column when searching */
+    .product-dropdown-wide {
+        width: auto !important; /* Allows the menu to stretch to fit the one-line content */
+        min-width: 100%; /* Ensures it's at least as wide as the input box */
+        max-width: 90vw; /* Prevents it from going off the screen entirely */
+        white-space: nowrap; /* Forces the content to stay on one line */
+    }
+    .product-dropdown-wide .select2-results__option {
+        white-space: nowrap; /* Keeps items on one line inside the wide dropdown */
+        padding: 8px 16px;
+    }
+
     .select2-dropdown { border: 1px solid var(--pos-border); border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); padding: 5px;}
-    .select2-results__option { padding: 8px 12px; border-radius: 4px; margin-bottom: 2px; transition: background 0.1s;}
+    .select2-results__option { border-radius: 4px; margin-bottom: 2px; transition: background 0.1s;}
     .select2-container--default .select2-results__option--highlighted[aria-selected] { background-color: #f1f5f9; color: #0f172a; }
     
     .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
@@ -159,7 +199,6 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                                 <select name="customer_id" id="mainCustomerSelect" class="form-select customer-select" required>
                                     <option value="">-- Search by Name, ID, or Phone --</option>
                                     <?php 
-                                    // Fetch ALL customer data so we can dynamically build the display box
                                     $custs = $conn->query("SELECT * FROM customers ORDER BY name ASC");
                                     while($c = $custs->fetch_assoc()) {
                                         $cid = !empty($c['customer_id']) ? $c['customer_id'] : 'CUST-'.str_pad($c['id'], 4, '0', STR_PAD_LEFT);
@@ -224,13 +263,13 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
                                                 <select name="product_id[]" class="form-select product-select" required>
                                                     <?php echo $prod_options; ?>
                                                 </select>
-                                                <input type="text" name="item_note[]" class="form-control form-control-sm mt-1 border-0 bg-light text-secondary shadow-none" style="font-size: 0.8rem;" placeholder="Serial No. / Note...">
+                                                <input type="text" name="item_note[]" class="form-control form-control-sm mt-1 border-0 bg-light text-secondary shadow-none" style="font-size: 0.8rem;" placeholder="Serial No. / Description Note...">
                                             </td>
                                             <td class="py-2"><input type="number" name="qty[]" class="form-control form-control-sm sale-qty text-center fw-bold rounded-3 px-1 shadow-sm border-secondary border-opacity-25" value="1" min="1" required onclick="this.select();"></td>
-                                            <td class="py-2"><input type="number" step="0.01" name="price[]" class="calc-text price-input text-end text-dark fw-bold w-100 px-1" required placeholder="0.00" onclick="this.select();"></td>
-                                            <td class="py-2"><input type="text" name="gst_rate[]" class="calc-text readonly-text gst-input text-center text-info w-100 px-1" readonly placeholder="0%"></td>
-                                            <td class="py-2"><input type="text" name="tax_amount[]" class="calc-text readonly-text tax-amount text-end text-info w-100 px-1" readonly placeholder="0.00"></td>
-                                            <td class="py-2 pe-3 col-highlight"><input type="text" class="calc-text readonly-text row-total text-end text-dark fs-6 w-100 px-1" readonly placeholder="0.00"></td>
+                                            <td class="py-2"><input type="number" step="0.01" name="price[]" class="calc-text form-control-sm price-input text-end text-dark fw-bold w-100 px-1" required placeholder="0.00" onclick="this.select();"></td>
+                                            <td class="py-2"><input type="text" name="gst_rate[]" class="calc-text form-control-sm readonly-text gst-input text-center text-info w-100 px-1" readonly placeholder="0%"></td>
+                                            <td class="py-2"><input type="text" name="tax_amount[]" class="calc-text form-control-sm readonly-text tax-amount text-end text-info w-100 px-1" readonly placeholder="0.00"></td>
+                                            <td class="py-2 pe-3 col-highlight"><input type="text" class="calc-text form-control-sm readonly-text row-total text-end text-dark fs-6 w-100 px-1" readonly placeholder="0.00"></td>
                                             <td class="text-center py-2"><button type="button" class="btn btn-sm btn-light text-danger remove-row rounded-circle shadow-sm border border-danger border-opacity-25 p-1" style="width:28px; height:28px;"><i class="bi bi-trash"></i></button></td>
                                         </tr>
                                     </tbody>
@@ -601,7 +640,9 @@ $auto_inv_no = "INV-" . str_pad($next_inv_id, 5, '0', STR_PAD_LEFT);
 <script>
 $(document).ready(function() {
     
-    // CUSTOMER FORMATTER (LIST)
+    // ==========================================
+    // 🎨 CUSTOMER FORMATTERS
+    // ==========================================
     function formatCustomerResult (c) {
         if (!c.id) return c.text;
         var el = $(c.element);
@@ -610,16 +651,67 @@ $(document).ready(function() {
         return $(`<div class="d-flex flex-column lh-sm"><span class="fw-bold text-dark fs-6">${c.text}</span><span class="small text-muted mt-1">${cid} ${phone}</span></div>`);
     }
 
-    // CUSTOMER FORMATTER (SELECTION - ADDS HOVER LOGIC)
     function formatCustomerSelection (c) {
         if (!c.id) return c.text;
         var el = $(c.element);
         return $(`<span class="hover-profile-link" data-name="${c.text}">${c.text} <i class="bi bi-info-circle text-primary ms-1"></i></span>`);
     }
 
+    // ==========================================
+    // 🎨 ADVANCED PRODUCT FORMATTERS
+    // ==========================================
+    // This creates the rich UI inside the dropdown list (Expands wide)
+    function formatProductResult (p) {
+        if (!p.id) return p.text; 
+        
+        var el = $(p.element);
+        var stock = parseFloat(el.data('stock')) || 0;
+        var price = parseFloat(el.data('price')) || 0;
+        var desc = el.data('desc') || '';
+        
+        var stockBadgeClass = stock > 10 ? 'bg-success' : (stock > 0 ? 'bg-warning text-dark' : 'bg-danger');
+
+        // Layout is completely horizontal to stretch the dropdown width
+        return $(`
+            <div class="d-flex align-items-center justify-content-between py-1 border-bottom border-light pe-3" style="min-width: max-content;">
+                <div class="d-flex align-items-center gap-3 me-5">
+                    <span class="fw-bold text-dark" style="font-size: 0.95rem;">${p.text}</span>
+                    <span class="text-muted" style="font-size: 0.85rem;">${desc}</span>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge ${stockBadgeClass} rounded-pill border shadow-sm" style="font-size: 0.75rem;">Stock: ${stock}</span>
+                    <span class="fw-bolder text-primary" style="font-size: 0.95rem;">₹${price.toFixed(2)}</span>
+                </div>
+            </div>
+        `);
+    }
+
+    // This shows what happens inside the input box AFTER selecting (Wraps cleanly)
+    function formatProductSelection (p) {
+        if (!p.id) return p.text;
+        var el = $(p.element);
+        var stock = parseFloat(el.data('stock')) || 0;
+        
+        return $(`<div style="white-space: normal; word-wrap: break-word; line-height: 1.25;"><span class="fw-bold">${p.text}</span> <small class="text-muted ms-1 fst-italic">(Stock: ${stock})</small></div>`);
+    }
+
+    // ==========================================
+    // 🚀 INITIALIZE SELECT2 WITH NEW FORMATTERS
+    // ==========================================
     function initSelect2() {
-        $('.customer-select').select2({ templateResult: formatCustomerResult, templateSelection: formatCustomerSelection, width: '100%' });
-        $('.product-select').select2({ width: '100%' });
+        $('.customer-select').select2({ 
+            templateResult: formatCustomerResult, 
+            templateSelection: formatCustomerSelection, 
+            width: '100%' 
+        });
+        
+        $('.product-select').select2({ 
+            templateResult: formatProductResult,     
+            templateSelection: formatProductSelection, 
+            width: '100%',
+            dropdownAutoWidth: true, // 🔥 Allow dropdown to expand horizontally
+            dropdownCssClass: 'product-dropdown-wide' 
+        });
     }
     initSelect2();
 
@@ -633,7 +725,7 @@ $(document).ready(function() {
             $('#infoModal').modal('show');
             $('#infoModalBody').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
             $.post('modules/ajax_get_customer.php', { name: name }, function(res) { $('#infoModalBody').html(res); });
-        }, 800); // 800ms hover delay to prevent accidental pops
+        }, 800); 
     }).on('mouseleave', '.hover-profile-link', function() {
         clearTimeout(hoverTimer);
     });
@@ -658,11 +750,9 @@ $(document).ready(function() {
 
         let data = el.data('json');
         if(data) {
-            // Build Billing Address
             let bill = `${data.village || ''} ${data.po ? ', PO: '+data.po : ''}<br>${data.dist ? 'Dist: '+data.dist : ''} ${data.pin ? ' - '+data.pin : ''}`;
             if(bill.trim() === '' || bill.trim() === ', PO:<br>') bill = '<span class="text-danger fst-italic">Missing Data</span>';
             
-            // Build Shipping Address
             let ship_vill = data.shipping_village || data.village || '';
             let ship_po = data.shipping_po || data.po || '';
             let ship_dist = data.shipping_dist || data.dist || '';
@@ -675,10 +765,8 @@ $(document).ready(function() {
             $('#displayShipping').html(ship);
             $('#customerDetailsBox').removeClass('d-none');
 
-            // Attach data to Update Button
             $('#updateAddressBtn').data('json', data);
             
-            // Change button text if data is missing
             if(bill.includes('Missing') || ship.includes('Missing')) {
                 $('#updateAddressBtn').removeClass('btn-outline-primary').addClass('btn-danger').html('<i class="bi bi-exclamation-circle me-1"></i> Add Address Data');
             } else {
@@ -691,11 +779,9 @@ $(document).ready(function() {
     $('#updateAddressBtn').click(function() {
         let data = $(this).data('json');
         
-        // Change Modal Title & ID
         $('#quickCustomerModal .modal-title').html('<i class="bi bi-pencil-square me-2"></i>Update Customer Details');
         $('#modal_update_id').val(data.id);
         
-        // Fill Fields
         $('#modal_name').val(data.name);
         $('#modal_contact').val(data.contact_no);
         $('#modal_vill').val(data.village);
@@ -715,7 +801,6 @@ $(document).ready(function() {
         $('#modal_acc').val(data.account_no);
         $('#modal_ifsc').val(data.ifsc_code);
 
-        // Reset the Same as Billing Checkbox
         $('#sameAsBilling').prop('checked', false);
 
         $('#quickCustomerModal').modal('show');
@@ -734,7 +819,7 @@ $(document).ready(function() {
         }
     });
 
-    // AJAX Form Submission - CUSTOMERS (Handles Both Insert & Update)
+    // AJAX Form Submission - CUSTOMERS
     $('#ajaxCustomerForm').submit(function(e) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]');
@@ -748,10 +833,8 @@ $(document).ready(function() {
             success: function(res) {
                 if(res.status == 'success') {
                     if(res.action === 'update') {
-                        // Reload page to securely refresh the JSON data in the select dropdown
                         location.reload(); 
                     } else {
-                        // Insert new option dynamically without reload
                         let newOption = new Option(res.name, res.id, true, true);
                         $(newOption).attr('data-json', JSON.stringify({
                             id: res.id, name: res.name, contact_no: res.phone,
@@ -800,16 +883,19 @@ $(document).ready(function() {
             let price = parseFloat(selectedOption.data('price') || 0).toFixed(2);
             let stock = selectedOption.data('stock') || 0;
             let gst = parseFloat(selectedOption.data('gst') || 0).toFixed(1);
+            let desc = selectedOption.data('desc') || ""; 
             
             row.find('.price-input').val(price);
             row.find('.sale-qty').attr('max', stock); 
             row.find('.gst-input').val(gst + '%');
+            row.find('input[name="item_note[]"]').val(desc); 
             calculateGrandTotal();
         } else {
             row.find('.price-input').val('');
             row.find('.gst-input').val('');
             row.find('.tax-amount').val('');
             row.find('.row-total').val('');
+            row.find('input[name="item_note[]"]').val(''); 
             calculateGrandTotal();
         }
     });
