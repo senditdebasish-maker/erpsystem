@@ -28,7 +28,7 @@
         <a href="settings.php"><i class="bi bi-cart-check me-2"></i> settings</a>
         <a href="add_customer.php"><i class="bi bi-person-plus me-2"></i> Add Customer</a>
         <a href="add_supplier.php"><i class="bi bi-truck me-2"></i> Add Supplier</a>
-        
+        <a href="sales_report.php"><i class="bi bi-truck me-2"></i> Sales Report</a>
         <a href="inventory.php"><i class="bi bi-box-seam me-2"></i> Inventory</a>
         <a href="manage_categories.php"><i class="bi bi-tags me-2"></i> Category Manager</a>
         <a href="unpaid_invoices.php"><i class="bi bi-exclamation-octagon text-warning me-2"></i> Pending Payments</a>
